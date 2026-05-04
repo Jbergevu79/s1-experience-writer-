@@ -1,0 +1,9 @@
+{
+  "name": "s1licensing-experience-writer",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "docx": "^9.0.0",
+    "openai": "^5.0.0"
+  }
+}
