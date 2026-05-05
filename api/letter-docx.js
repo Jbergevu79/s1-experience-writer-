@@ -10,12 +10,17 @@ function setCors(res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
+function getPosition(segment = {}) {
+  return segment.positionTitle === "Other" ? segment.customPositionTitle : segment.positionTitle;
+}
+
 function buildLetterPrompt({ segments = [], letterFields = {} }) {
   const header = [
     "Write a formal employer verification letter.",
     "The letter should sound like it is written by the employer or supervisor.",
-    "Do not mention NEC chapters or NEC articles in the final writing.",
+    "Do not mention NEC chapters or NEC articles.",
     "Use a professional business tone and keep the experience credible and specific.",
+    "Do not invent licenses, certifications, hours, or responsibilities that were not provided.",
     `Applicant name: ${letterFields.applicantName || "[not provided]"}`,
     `Verifier name: ${letterFields.verifierName || "[not provided]"}`,
     `Verifier title: ${letterFields.verifierTitle || "[not provided]"}`,
@@ -27,17 +32,18 @@ function buildLetterPrompt({ segments = [], letterFields = {} }) {
 
   const segs = segments
     .map((segment, index) => {
-      const envMap = segment.workTypesByEnvironment || {};
-      const envLines = (segment.workEnvironments || [])
-        .map(env => `${env}: ${(envMap[env] || []).join(", ") || "[none selected]"}`)
+      const map = segment.workExamplesByWorkType || {};
+      const workTypeLines = (segment.workTypes || [])
+        .map(type => `${type}: ${(map[type] || []).join(", ") || "[none selected]"}`)
         .join("\n");
 
       return [
         `Segment ${index + 1}`,
         `Company: ${segment.company || "[not provided]"}`,
-        `Years: ${segment.years || "[not provided]"}`,
-        `Work environments: ${(segment.workEnvironments || []).join(", ") || "[not provided]"}`,
-        envLines,
+        `Years employed: ${segment.years || "[not provided]"}`,
+        `Position/title: ${getPosition(segment) || "[not provided]"}`,
+        `Work types: ${(segment.workTypes || []).join(", ") || "[not provided]"}`,
+        workTypeLines,
         `Other tasks: ${segment.otherTasks || "None"}`,
         `Other systems: ${segment.otherSystems || "None"}`
       ].filter(Boolean).join("\n");
@@ -96,4 +102,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: error?.message || "Unexpected server error" });
   }
 }
-
