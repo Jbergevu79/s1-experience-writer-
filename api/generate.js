@@ -9,24 +9,48 @@ function setCors(res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
-function buildPrompt({ outputMode, segments = [], letterFields = {}, prompt }) {
+function getPosition(segment = {}) {
+  return segment.positionTitle === "Other" ? segment.customPositionTitle : segment.positionTitle;
+}
+
+function getExperienceLevel(position) {
+  const t = String(position || "").toLowerCase();
+  if (t.includes("apprentice")) return "apprentice";
+  if (t.includes("foreman") || t.includes("lead") || t.includes("supervisor")) return "leadership";
+  if (t.includes("manager") || t.includes("master")) return "management";
+  if (t.includes("technician") || t.includes("controls") || t.includes("solar")) return "specialized";
+  return "journeyman";
+}
+
+function buildPrompt({ writingType, outputMode, segments = [], letterFields = {}, prompt }) {
   if (prompt) return prompt;
 
-  const intro =
-    outputMode === "applicant"
-      ? "Write first-person electrician narratives. Write one paragraph per company/year segment in the electrician's own voice."
-      : outputMode === "verifier"
-      ? "Write third-person verifier narratives. Write one paragraph per company/year segment in the verifier's voice."
-      : "Write a formal employer verification letter that uses the employer or supervisor voice, with a date line, salutation, body paragraphs, and closing.";
+  const mode = writingType || outputMode || "application";
+
+  const modeInstructions = {
+    application:
+      "Write first-person experience descriptions for a licensing application. Use I language. Focus on hands-on work personally performed, scope of work, environments, systems, and growth in responsibility.",
+    verified:
+      "Write third-person verified experience descriptions as if a supervisor or employer is confirming the applicant's duties. Use factual, professional language and avoid exaggeration.",
+    letter:
+      "Write a formal employer verification letter. Use a professional business tone, include verification of work history, describe duties clearly, and make it suitable for letterhead and signature.",
+    summary:
+      "Write a clear professional summary of electrical experience. Use a balanced tone that is useful for applications, discussions, or general documentation.",
+    resume:
+      "Write a concise resume-style experience description. Use short, direct language focused on responsibilities, work types, and key capabilities."
+  };
 
   const rules = [
-    "Do not mention NEC chapters or NEC articles in the final writing.",
-    "Use the selected work environments and work examples as guidance for the substance of the work.",
-    "Write naturally and credibly, as if describing real electrical experience."
+    modeInstructions[mode] || modeInstructions.application,
+    "Do not mention NEC chapters or NEC articles.",
+    "Do not invent licenses, certifications, hours, or responsibilities that were not provided.",
+    "Use the selected work types and work examples as the basis for the description.",
+    "Write naturally and credibly, as if describing real electrical experience.",
+    "Each company/year segment should remain separate unless the selected format requires a combined letter."
   ];
 
   const letterHeader =
-    outputMode === "letter"
+    mode === "letter"
       ? [
           `Applicant name: ${letterFields.applicantName || "[not provided]"}`,
           `Verifier name: ${letterFields.verifierName || "[not provided]"}`,
@@ -40,24 +64,28 @@ function buildPrompt({ outputMode, segments = [], letterFields = {}, prompt }) {
 
   const segmentText = segments
     .map((segment, index) => {
-      const envMap = segment.workTypesByEnvironment || {};
-      const envLines = (segment.workEnvironments || [])
-        .map(env => `${env}: ${(envMap[env] || []).join(", ") || "[none selected]"}`)
+      const position = getPosition(segment);
+      const level = getExperienceLevel(position);
+      const map = segment.workExamplesByWorkType || {};
+      const workTypeLines = (segment.workTypes || [])
+        .map(type => `${type}: ${(map[type] || []).join(", ") || "[none selected]"}`)
         .join("\n");
 
       return [
         `Segment ${index + 1}`,
         `Company: ${segment.company || "[not provided]"}`,
-        `Years: ${segment.years || "[not provided]"}`,
-        `Work environments: ${(segment.workEnvironments || []).join(", ") || "[not provided]"}`,
-        envLines,
+        `Years employed: ${segment.years || "[not provided]"}`,
+        `Position/title: ${position || "[not provided]"}`,
+        `Experience level cue from title: ${level}`,
+        `Work types: ${(segment.workTypes || []).join(", ") || "[not provided]"}`,
+        workTypeLines,
         `Other tasks: ${segment.otherTasks || "None"}`,
         `Other systems: ${segment.otherSystems || "None"}`
       ].filter(Boolean).join("\n");
     })
     .join("\n\n");
 
-  return [intro, ...rules, letterHeader, segmentText].filter(Boolean).join("\n\n");
+  return [...rules, letterHeader, segmentText].filter(Boolean).join("\n\n");
 }
 
 export default async function handler(req, res) {
@@ -78,4 +106,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: error?.message || "Unexpected server error" });
   }
 }
-
